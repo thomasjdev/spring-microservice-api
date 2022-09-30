@@ -9,8 +9,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
+import org.springframework.util.concurrent.ListenableFuture;
+import org.springframework.util.concurrent.ListenableFutureCallback;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,6 +33,7 @@ public class SpringMicroserviceApiApplication {
 
 }
 
+@Slf4j
 @RestController
 class AvailabilityController {
 
@@ -50,8 +54,20 @@ class AvailabilityController {
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
     private void sendMessage(String message) {
-        
-        kafkaTemplate.send(topicName, message);
+        ListenableFuture<SendResult<String, String>> future =
+                kafkaTemplate.send(topicName, message);
+
+        future.addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
+            @Override
+            public void onFailure(Throwable ex) {
+                log.error("Error sending message [" + message + "] due to: " + ex.getMessage());
+            }
+
+            @Override
+            public void onSuccess(SendResult<String, String> result) {
+                log.info("Sent message [" + message + "] with offset [" + result.getRecordMetadata().offset() + "]");
+            }
+        });
     }
 
     private boolean checkAvailabliity(String console) {
